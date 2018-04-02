@@ -1,0 +1,8 @@
+[package]
+name = "rust-handson"
+version = "0.1.0"
+authors = ["Frank Rehberger <frehberg@gmail.com>"]
+
+[dependencies]
+tokio = { git = "https://github.com/tokio-rs/tokio" }
+futures = "0.1.19"

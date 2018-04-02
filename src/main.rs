@@ -22,12 +22,24 @@ use tokio::prelude::*;
 use futures::sync::mpsc;
 use futures::sync::mpsc::Sender;
 use futures::sync::mpsc::Receiver;
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
-struct PortEvent { mesg: &'static str }
+struct RawMesg {
+    portname: String,
+    timestamp: Instant,
+    origin: std::net::SocketAddr,
+    mesg: Vec<u8>,
+}
+
+#[derive(Debug)]
+enum PortEvent {
+    RawMesg(RawMesg),
+}
 
 ///
 struct PortStream {
+    portname: String,
     socket: TcpStream,
     tx : Sender<PortEvent>,
 }
@@ -68,19 +80,26 @@ pub fn main() {
     // incoming connection.
     let server =
         listener.incoming().for_each(move |socket| {
-            println!("accepted socket; addr={:?}", socket.peer_addr().unwrap());
+            let peer =  socket.peer_addr().unwrap();
+
+            println!("accepted socket; addr={:?}", peer);
+
             let tx = tx.clone();
 
            //tx.send(PortEvent {});
+            let portname = "Server1".to_string();
 
-            let port = PortStream{socket, tx,};
+            let port = PortStream{portname, socket, tx,};
 
             let connection =
                 io::write_all(port, "hello world\n")
-                    .then( | res | {
+                    .then( move | res | {
                         let (port, buf) = res.ok().unwrap();
-                        port.tx.send( PortEvent {mesg: "data sent"} )
-                    })
+                        port.tx.send( PortEvent::RawMesg(
+                            RawMesg{portname: port.portname,
+                                timestamp: Instant::now(),
+                                origin: peer,
+                                mesg: vec!{0,1,2} } ) ) } )
                     .then( |res| {
                         println!("wrote message; success={:?}",res.is_ok());
 

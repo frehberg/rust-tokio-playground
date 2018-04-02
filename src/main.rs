@@ -20,37 +20,41 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 //use bytes::Buf;
 use futures::sync::mpsc;
+use futures::sync::mpsc::Sender;
+use futures::sync::mpsc::Receiver;
 
 #[derive(Debug)]
-struct PortEvent {}
+struct PortEvent { mesg: &'static str }
 
 ///
-struct PortStream (TcpStream);
+struct PortStream {
+    socket: TcpStream,
+    tx : Sender<PortEvent>,
+}
 
 ///
 impl io::Write for PortStream {
     ///
     fn flush(&mut self) -> std::io::Result<()> {
-        self.0.flush()
+        self.socket.flush()
     }
 
     ///
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.0.write(buf)
+        self.socket.write(buf)
     }
 }
 
 ///
 impl io::AsyncWrite for PortStream {
     fn shutdown(&mut self) -> Poll<(), io::Error> {
-        <&TcpStream>::shutdown(&mut  &(self.0))
+        <&TcpStream>::shutdown(&mut  &(self.socket))
     }
 }
 
 
 pub fn main() {
     let mut runtime = tokio::runtime::Runtime::new().unwrap();
-
     let addr = "127.0.0.1:6142".parse().unwrap();
 
     let (tx, rx) = mpsc::channel(1);
@@ -67,14 +71,19 @@ pub fn main() {
             println!("accepted socket; addr={:?}", socket.peer_addr().unwrap());
             let tx = tx.clone();
 
-            tx.send(PortEvent {});
+           //tx.send(PortEvent {});
 
-            let port = PortStream(socket);
+            let port = PortStream{socket, tx,};
 
             let connection =
                 io::write_all(port, "hello world\n")
-                    .then(|res| {
-                        println!("wrote message; success={:?}", res.is_ok());
+                    .then( | res | {
+                        let (port, buf) = res.ok().unwrap();
+                        port.tx.send( PortEvent {mesg: "data sent"} )
+                    })
+                    .then( |res| {
+                        println!("wrote message; success={:?}",res.is_ok());
+
                         Ok(())
                     });
 
